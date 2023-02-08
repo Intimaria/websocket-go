@@ -2,16 +2,27 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 )
 
+type User struct {
+	Name string
+}
+
 func homePage(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Home Page")
+	t := template.New("index.html")
+	t, _ = t.ParseFiles("index.html")
+	s := User{Name: "Inti"}
+	t.Execute(w, s)
 }
 
 func wsEndpoint(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello World")
+	t := template.New("hi")
+	t, _ = t.Parse("Hi, {{ .Name }}!")
+	s := User{Name: "Inti"}
+	t.Execute(w, s)
 }
 
 func setupRoutes() {
