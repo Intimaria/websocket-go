@@ -2,40 +2,56 @@ package main
 
 import (
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
+  "io"
+	"golang.org/x/net/websocket"
 )
 
-type User struct {
-	Name string
+type Server struct {
+	conns map[*websocket.Conn]bool
 }
 
-func getUser(name string) User {
-	return User{Name: name}
+func NewServer() *Server {
+  return &Server{
+    conns: make(map[*websocket.Conn]bool),
+  }
 }
 
-func homePage(w http.ResponseWriter, r *http.Request) {
-	t := template.New("index.html")
-	t, _ = t.ParseFiles("index.html")
-	s := getUser("Inti")
-	t.Execute(w, s)
+func (s *Server) handleWS(ws *websocket.Conn){
+ fmt.Println("new incoming connection from client", ws.RemoteAddr())
+ s.conns[ws] = true
+ s.readLoop(ws)
 }
 
-func wsEndpoint(w http.ResponseWriter, r *http.Request) {
-	t := template.New("hi")
-	t, _ = t.Parse("Hi, {{ .Name }}!")
-	s := getUser("you")
-	t.Execute(w, s)
+func (s *Server) readLoop(ws *websocket.Conn){
+  buf := make([]byte, 1024)
+  for {
+    n, err := ws.Read(buf)
+    if err != nil {
+      if err == io.EOF {
+        break
+      }
+      fmt.Println("read error:", err)
+      continue
+    }
+    msg := buf[:n]
+    s.broadcast(msg)
+  }
 }
-
-func setupRoutes() {
-	http.HandleFunc("/", homePage)
-	http.HandleFunc("/ws", wsEndpoint)
+func (s *Server) broadcast (b []byte){
+  for ws := range s.conns {
+    go func(ws *websocket.Conn) {
+      if _,err := ws.Write(b); err != nil {
+        fmt.Println("write error:", err)
+      }
+    }(ws)
+  }
 }
 
 func main() {
 	fmt.Println("Hello World")
-	setupRoutes()
-	log.Fatal(http.ListenAndServe(":8080", nil))
+  server := NewServer()
+  http.Handle("/ws", websocket.Handler(server.handleWS))
+  log.Fatal(http.ListenAndServe(":3000", nil))
 }
